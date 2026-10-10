@@ -1,0 +1,37 @@
+# Python virtual environment
+.venv/
+venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Local data and generated outputs
+data/raw/
+data/downloads/
+data/processed/
+data/quarantine/
+*.log
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Power BI local cache and settings
+**/.pbi/
+
+# Editor and operating system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local database backups
+*.backup
+*.dump
