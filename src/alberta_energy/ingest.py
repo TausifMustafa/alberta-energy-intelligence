@@ -48,6 +48,8 @@ class ST60Batch:
     sha256: str
     encoding: str
     records: pd.DataFrame
+    source_member: str | None = None
+    source_archive_sha256: str | None = None
 
 
 def _period_from_filename(path: Path) -> date:
@@ -71,16 +73,21 @@ def _decode(raw: bytes) -> tuple[str, str]:
         return raw.decode("cp1252"), "cp1252"
 
 
-def read_st60_csv(path: str | Path) -> ST60Batch:
-    """Parse and validate one monthly ST60 CSV without modifying the source.
+def _read_st60_bytes(
+    raw_bytes: bytes,
+    *,
+    source_name: str,
+    source_path: Path,
+    source_member: str | None = None,
+    source_archive_sha256: str | None = None,
+) -> ST60Batch:
+    """Parse monthly CSV bytes, shared by standalone and ZIP ingestion.
 
-    Raises FileNotFoundError for a missing file and ST60FormatError for
-    unexpected layout, period, required columns, identifiers, or quantities.
-    This is strict ingestion: malformed observations are never dropped.
+    For ZIP members source_path is the actual ZIP file, while source_name
+    names the member CSV. Member bytes receive their own source_sha256.
     """
-    source = Path(path)
+    source = Path(source_name)
     report_month = _period_from_filename(source)
-    raw_bytes = source.read_bytes()
     if not raw_bytes:
         raise ST60FormatError(f"Empty ST60 file: {source}")
 
@@ -178,12 +185,30 @@ def read_st60_csv(path: str | Path) -> ST60Batch:
     frame["source_file"] = source.name
     frame["source_sha256"] = checksum
     frame["source_row_number"] = csv_row_numbers
+    if source_member is not None:
+        frame["source_archive"] = source_path.name
+        frame["source_archive_sha256"] = source_archive_sha256
+        frame["source_archive_member"] = source_member
 
     return ST60Batch(
-        source_path=source,
+        source_path=source_path,
         report_month=report_month,
         metadata=tuple(metadata),
         sha256=checksum,
         encoding=encoding,
         records=frame,
+        source_member=source_member,
+        source_archive_sha256=source_archive_sha256,
+    )
+
+
+def read_st60_csv(path: str | Path) -> ST60Batch:
+    """Parse and validate one ST60 CSV without modifying the source.
+
+    Raises FileNotFoundError for missing files and ST60FormatError for
+    bad structure, identifiers, periods, or non-numeric quantities.
+    """
+    source = Path(path)
+    return _read_st60_bytes(
+        source.read_bytes(), source_name=source.name, source_path=source
     )
