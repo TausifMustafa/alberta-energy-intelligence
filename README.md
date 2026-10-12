@@ -14,7 +14,7 @@ Implemented reusable Python ingestion for monthly AER ST60 CSV files and histori
 
 Added data cleaning, record-level validation, quarantine handling, quality reports, and source-volume reconciliation. Validated the pipeline against 12 months of 2025 ST60 data (100,637 records) and August 2026 data (8,156 records).
 
-PostgreSQL tables and a version-aware Python loader are implemented. Verified loading of 108,793 accepted records across 13 reporting months, with repeat loading of an identical file successfully skipped. Power BI dashboards, further analytical SQL views, and anomaly detection are upcoming milestones.
+PostgreSQL tables and a version-aware Python loader are implemented. The database now contains **371,244 accepted battery-month records across 44 reporting months (January 2023-August 2026)**. Source-to-database counts and five core measurements reconciled for the Day 6 backfill. Live PostgreSQL integration testing verified source revisions, identical-source skipping, and failed-load rollback. Power BI dashboards, further analytical SQL views, and anomaly detection remain upcoming milestones.
 
 ### Data Source
 

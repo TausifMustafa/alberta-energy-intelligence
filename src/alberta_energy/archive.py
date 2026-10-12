@@ -1,8 +1,7 @@
-"""Read an AER ST60 yearly ZIP using the existing monthly CSV parser.
+"""Read AER ST60 annual ZIP archives using the monthly CSV parser.
 
-All parsing is in-memory. ZIP contents are never extracted and invalid
-months are not silently dropped. A complete 12-month year is required by
-default; partial-year reading must be requested explicitly.
+The original archive and member names are kept for provenance. Archives are
+read without extracting source files, and missing months are not hidden.
 """
 
 import hashlib
@@ -22,13 +21,14 @@ from alberta_energy.ingest import (
     _read_st60_bytes,
 )
 
-ARCHIVE_PATTERN = re.compile(r"^ST60_(\d{4})\.zip$", re.IGNORECASE)
+# The AER uses both ST60_2024.zip and ST60-2023.zip.
+ARCHIVE_PATTERN = re.compile(r"^ST60[-_](\d{4})\.zip$", re.IGNORECASE)
 MEMBER_PATTERN = re.compile(r"^ST60_(\d{4})-(\d{2})\.csv$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
 class ST60Archive:
-    """Validated observations from one yearly ST60 archive."""
+    """Validated monthly batches and original annual ZIP provenance."""
 
     source_path: Path
     sha256: str
@@ -51,18 +51,15 @@ def read_st60_archive(
     require_complete_year: bool = True,
     record_mode: RecordMode = "strict",
 ) -> ST60Archive:
-    """Read yearly ST60 ZIP, validate months and combine typed observations.
-
-    Returns one ST60Batch per available month and combined records sorted by
-    reporting period. The original battery/operator values remain month-specific.
-    ZIP members are not written to disk. Errors reject the entire archive.
-    """
+    """Read each month from a ZIP, preserving each member's source metadata."""
     source = Path(path)
     match = ARCHIVE_PATTERN.fullmatch(source.name)
     if match is None:
-        raise ST60FormatError(f"Expected ST60_YYYY.zip filename, got {source.name!r}")
+        raise ST60FormatError(
+            f"Expected ST60_YYYY.zip or ST60-YYYY.zip filename, got {source.name!r}"
+        )
     archive_year = int(match.group(1))
-    archive_sha256 = _file_sha256(source)  # Also raises FileNotFoundError.
+    archive_sha256 = _file_sha256(source)
 
     monthly_members: dict[int, zipfile.ZipInfo] = {}
     batches: list[ST60Batch] = []
@@ -75,19 +72,24 @@ def read_st60_archive(
                 member_match = MEMBER_PATTERN.fullmatch(name)
                 if member_match is None:
                     if name.upper().startswith("ST60_") and name.lower().endswith(".csv"):
-                        raise ST60FormatError(f"Unexpected ST60 member name: {info.filename!r}")
-                    continue  # A non-data README or other ancillary file.
+                        raise ST60FormatError(
+                            f"Unexpected ST60 member name: {info.filename!r}"
+                        )
+                    continue
                 year, month = map(int, member_match.groups())
                 if year != archive_year or not 1 <= month <= 12:
                     raise ST60FormatError(
-                        f"Archive {source.name} contains out-of-year/invalid member {info.filename!r}"
+                        f"Archive {source.name} contains out-of-year/invalid member "
+                        f"{info.filename!r}"
                     )
                 if month in monthly_members:
                     raise ST60FormatError(
                         f"Duplicate ST60 month {year}-{month:02d} in {source.name}"
                     )
                 if info.flag_bits & 1:
-                    raise ST60FormatError(f"Encrypted ST60 member not supported: {info.filename!r}")
+                    raise ST60FormatError(
+                        f"Encrypted ST60 member not supported: {info.filename!r}"
+                    )
                 monthly_members[month] = info
 
             if not monthly_members:
@@ -122,13 +124,16 @@ def read_st60_archive(
                 except ST60FormatError as exc:
                     raise ST60FormatError(f"{info.filename}: {exc}") from exc
                 if batch.report_month != date(archive_year, month, 1):
-                    raise ST60FormatError(f"Reporting period mismatch in {info.filename!r}")
+                    raise ST60FormatError(
+                        f"Reporting period mismatch in {info.filename!r}"
+                    )
                 columns = tuple(batch.records.columns[:EXPECTED_COLUMN_COUNT])
                 if expected_columns is None:
                     expected_columns = columns
                 elif columns != expected_columns:
                     raise ST60FormatError(
-                        f"ST60 column schema differs in {info.filename!r} from first month"
+                        f"ST60 column schema differs in {info.filename!r} "
+                        "from first month"
                     )
                 batches.append(batch)
     except zipfile.BadZipFile as exc:
