@@ -22,6 +22,23 @@ PostgreSQL tables and a version-aware Python loader are implemented. The databas
 
 ST60 contains reported battery-level data and does not represent all Alberta oil and gas production. This independent educational project is not affiliated with or endorsed by the AER.
 
+## Reusable ST60 ETL Workflow
+
+Use the unified command to validate, load, and reconcile ST60 data:
+
+```powershell
+python scripts/load_st60.py --validate data/raw
+python scripts/load_st60.py --verify-db data/raw
+python scripts/load_st60.py --load data/raw
+```
+
+Validation is read-only. Loading requires the explicit `--load` option.
+Individual monthly CSVs and annual ZIPs are also supported.
+
+See [Data Pipeline](docs/data_pipeline.md) for commands and safeguards,
+and [Database](docs/database.md) for schema, provenance, revisions,
+and reconciliation. Run `sql/validate_st60.sql` for a separate SQL audit.
+
 ## ST60 Data Ingestion and Quality Validation
 
 The Python pipeline supports standalone monthly ST60 CSV files and

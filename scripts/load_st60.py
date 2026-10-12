@@ -1,79 +1,72 @@
-"""Load one ST60 monthly CSV or historical ZIP into local PostgreSQL.
+"""Validate, load or verify ST60 source files using one reusable command.
 
-Examples:
-    python scripts/load_st60.py data/raw/ST60_2026-08.csv
-    python scripts/load_st60.py data/raw/ST60_2025.zip
+Examples (run from the repository root):
+    python scripts/load_st60.py --validate data/raw
+    python scripts/load_st60.py --verify-db data/raw
+    python scripts/load_st60.py --load data/raw/ST60_2026-08.csv
+    python scripts/load_st60.py --load data/raw
 """
 
 import argparse
-import getpass
-import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from alberta_energy.archive import read_st60_archive
-from alberta_energy.database import load_st60_month
-from alberta_energy.ingest import read_st60_csv
-from alberta_energy.quality import assess_st60_quality
+from alberta_energy.pipeline import (
+    PipelineError,
+    connect_database,
+    load_sources,
+    preflight,
+    verify_database,
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path, help="Official ST60_YYYY-MM.csv or ST60_YYYY.zip")
-    parser.add_argument("--allow-partial-year", action="store_true", help="Allow missing months in a ZIP")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--validate", action="store_true", help="Preflight only (default; no DB connection)")
+    mode.add_argument("--load", action="store_true", help="Preflight, then load and reconcile PostgreSQL")
+    mode.add_argument("--verify-db", action="store_true", help="Preflight and read-only PostgreSQL reconciliation")
+    parser.add_argument("source", type=Path, help="One ST60 CSV/ZIP or a directory of source files")
+    parser.add_argument("--allow-partial-year", action="store_true", help="Permit fewer than 12 months in a yearly ZIP")
+    parser.add_argument("--allow-gaps", action="store_true", help="Permit nonconsecutive months in a directory")
+    parser.add_argument(
+        "--allow-quality-issues", action="store_true",
+        help="Permit a reviewed load with quarantined rows or warnings",
+    )
+    parser.add_argument(
+        "--manifest", type=Path,
+        default=ROOT / "data" / "processed" / "st60_manifest.json",
+        help="Local JSON validation report (ignored under data/processed/)",
+    )
     args = parser.parse_args()
-    if not args.source.is_file():
-        parser.error(f"Source not found: {args.source}")
-
-    if args.source.suffix.lower() == ".zip":
-        archive = read_st60_archive(
-            args.source,
-            require_complete_year=not args.allow_partial_year,
-            record_mode="raw",
-        )
-        batches = archive.batches
-    elif args.source.suffix.lower() == ".csv":
-        batches = (read_st60_csv(args.source, record_mode="raw"),)
-    else:
-        parser.error("Source must be a monthly .csv or annual .zip file")
+    if args.allow_quality_issues and not args.load:
+        parser.error("--allow-quality-issues requires --load")
 
     try:
-        import psycopg
-    except ImportError as exc:
-        raise SystemExit(
-            "Psycopg is not installed. Run: python -m pip install -r requirements.txt"
-        ) from exc
-
-    password = os.environ.get("AEI_DB_PASSWORD") or getpass.getpass(
-        "Password for PostgreSQL user aei_loader: "
-    )
-    config = {
-        "host": os.environ.get("AEI_DB_HOST", "localhost"),
-        "port": int(os.environ.get("AEI_DB_PORT", "5432")),
-        "dbname": os.environ.get("AEI_DB_NAME", "alberta_energy_intelligence"),
-        "user": os.environ.get("AEI_DB_USER", "aei_loader"),
-        "password": password,
-        "connect_timeout": 10,
-        "autocommit": True,
-    }
-
-    # One connection; a separate transaction for each month in the archive.
-    with psycopg.connect(**config) as connection:
-        for batch in batches:
-            quality = assess_st60_quality(batch)
-            outcome = load_st60_month(connection, batch, quality)
-            print(
-                f"{outcome.report_month}: {outcome.status}; "
-                f"source={outcome.source_sha256[:12]}; "
-                f"input={outcome.input_rows:,}, "
-                f"accepted={outcome.accepted_rows:,}, "
-                f"quarantined={outcome.quarantined_rows:,}, "
-                f"issues={outcome.issues:,}"
-            )
-    return 0
+        paths, reports = preflight(
+            args.source,
+            allow_partial_year=args.allow_partial_year,
+            allow_gaps=args.allow_gaps,
+            manifest_path=args.manifest,
+        )
+        if not (args.load or args.verify_db):
+            print("Validation only: PostgreSQL was not modified.")
+            return 0
+        with connect_database() as connection:
+            if args.load:
+                load_sources(
+                    connection, paths, reports,
+                    allow_partial_year=args.allow_partial_year,
+                    allow_quality_issues=args.allow_quality_issues,
+                )
+            verify_database(connection, reports)
+        return 0
+    except (PipelineError, ValueError, OSError) as exc:
+        print(f"ST60 pipeline stopped: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
