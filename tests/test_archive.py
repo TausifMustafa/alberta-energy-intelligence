@@ -162,3 +162,52 @@ def test_real_2025_archive_reconciles_day1_profile() -> None:
     assert all(len(batch.records.columns) == 36 for batch in result.batches)
     assert result.records["report_month"].nunique() == 12
     assert result.records["source_sha256"].nunique() == 12
+
+
+def test_archive_raw_mode_preserves_invalid_records_for_quality_review(
+    tmp_path: Path,
+) -> None:
+    from alberta_energy.quality import assess_st60_quality
+
+    invalid = row("000301")
+    invalid[4] = "not-a-number"
+
+    duplicate = row("000301", "0013")
+
+    source = make_archive(
+        tmp_path,
+        overrides={3: {"records": [invalid, duplicate]}},
+    )
+
+    # Raw mode should preserve both records rather than
+    # rejecting the entire historical archive.
+    archive = read_st60_archive(source, record_mode="raw")
+
+    assert len(archive.batches) == 12
+    assert len(archive.records) == 13
+
+    march = archive.batches[2]
+    assert march.report_month == date(2025, 3, 1)
+
+    assert march.records["OIL PROD (M3)"].iloc[0] == "not-a-number"
+    assert march.records["source_row_number"].tolist() == [4, 5]
+
+    result = assess_st60_quality(march)
+
+    assert result.summary["input_rows"] == 2
+    assert result.summary["accepted_rows"] == 0
+    assert result.summary["quarantined_rows"] == 2
+
+    assert (
+        result.issues["reason_code"]
+        .eq("duplicate_battery_month")
+        .sum()
+        == 2
+    )
+
+    assert "invalid_numeric" in result.issues["reason_code"].tolist()
+
+    # ZIP provenance must survive raw ingestion and quarantine.
+    assert result.quarantined["source_archive_member"].eq(
+        "ST60_2025-03.csv"
+    ).all()

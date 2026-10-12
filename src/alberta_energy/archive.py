@@ -16,6 +16,7 @@ import pandas as pd
 
 from alberta_energy.ingest import (
     EXPECTED_COLUMN_COUNT,
+    RecordMode,
     ST60Batch,
     ST60FormatError,
     _read_st60_bytes,
@@ -45,7 +46,10 @@ def _file_sha256(path: Path) -> str:
 
 
 def read_st60_archive(
-    path: str | Path, *, require_complete_year: bool = True
+    path: str | Path,
+    *,
+    require_complete_year: bool = True,
+    record_mode: RecordMode = "strict",
 ) -> ST60Archive:
     """Read yearly ST60 ZIP, validate months and combine typed observations.
 
@@ -113,6 +117,7 @@ def read_st60_archive(
                         source_path=source,
                         source_member=info.filename,
                         source_archive_sha256=archive_sha256,
+                        record_mode=record_mode,
                     )
                 except ST60FormatError as exc:
                     raise ST60FormatError(f"{info.filename}: {exc}") from exc

@@ -13,6 +13,7 @@ from calendar import month_abbr
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 
@@ -32,7 +33,7 @@ REQUIRED_COLUMNS = frozenset(
 )
 SOURCE_NAME_PATTERN = re.compile(r"^ST60_(\d{4})-(\d{2})\.csv$", re.IGNORECASE)
 NUMERIC_SUFFIXES = ("(M3)", "(1000 M3)", "# WELLS")
-
+RecordMode = Literal["strict", "raw"]
 
 class ST60FormatError(ValueError):
     """An ST60 source file violates the observed monthly CSV contract."""
@@ -73,6 +74,7 @@ def _decode(raw: bytes) -> tuple[str, str]:
         return raw.decode("cp1252"), "cp1252"
 
 
+
 def _read_st60_bytes(
     raw_bytes: bytes,
     *,
@@ -80,6 +82,7 @@ def _read_st60_bytes(
     source_path: Path,
     source_member: str | None = None,
     source_archive_sha256: str | None = None,
+    record_mode: RecordMode = "strict",
 ) -> ST60Batch:
     """Parse monthly CSV bytes, shared by standalone and ZIP ingestion.
 
@@ -88,6 +91,8 @@ def _read_st60_bytes(
     """
     source = Path(source_name)
     report_month = _period_from_filename(source)
+    if record_mode not in ("strict", "raw"):
+        raise ValueError(f"Unsupported ST60 record mode: {record_mode!r}")
     if not raw_bytes:
         raise ST60FormatError(f"Empty ST60 file: {source}")
 
@@ -139,7 +144,12 @@ def _read_st60_bytes(
                     f"CSV line {line_number}: expected {EXPECTED_COLUMN_COUNT} "
                     f"fields, got {len(row)}"
                 )
-            rows.append([value.strip() for value in row])
+
+            if record_mode == "strict":
+                rows.append([value.strip() for value in row])
+            else:
+                rows.append(row)
+
             csv_row_numbers.append(line_number)
     except csv.Error as exc:
         raise ST60FormatError(f"Malformed CSV record: {exc}") from exc
@@ -147,39 +157,51 @@ def _read_st60_bytes(
     if not rows:
         raise ST60FormatError("ST60 file contains no reporting records")
 
+
     frame = pd.DataFrame(rows, columns=columns, dtype="string")
-    for column in ("BATTERY CODE", "OPER CODE"):
-        empty = frame[column].eq("")
-        if empty.any():
-            number = csv_row_numbers[int(empty[empty].index[0])]
-            raise ST60FormatError(f"CSV line {number}: blank required {column}")
 
-    duplicates = frame["BATTERY CODE"].duplicated(keep=False)
-    if duplicates.any():
-        example = frame.loc[duplicates, "BATTERY CODE"].iloc[0]
-        raise ST60FormatError(
-            f"Repeated BATTERY CODE within {report_month:%Y-%m}: {example!r}"
-        )
+    if record_mode == "strict":
+        for column in ("BATTERY CODE", "OPER CODE"):
+            empty = frame[column].eq("")
+            if empty.any():
+                number = csv_row_numbers[int(empty[empty].index[0])]
+                raise ST60FormatError(
+                    f"CSV line {number}: blank required {column}"
+                )
 
-    numeric_columns = [
-        name for name in columns if name.endswith(NUMERIC_SUFFIXES)
-    ]
-    for column in numeric_columns:
-        original = frame[column]
-        parsed = pd.to_numeric(original.mask(original.eq("")), errors="coerce")
-        invalid = original.ne("") & (
-            parsed.isna() | parsed.isin([float("inf"), float("-inf")])
-        )
-        if invalid.any():
-            bad_index = int(invalid[invalid].index[0])
-            number = csv_row_numbers[bad_index]
+        duplicates = frame["BATTERY CODE"].duplicated(keep=False)
+        if duplicates.any():
+            example = frame.loc[duplicates, "BATTERY CODE"].iloc[0]
             raise ST60FormatError(
-                f"CSV line {number}: invalid numeric value "
-                f"{frame.loc[bad_index, column]!r} "
-                f"in {column}"
+                f"Repeated BATTERY CODE within "
+                f"{report_month:%Y-%m}: {example!r}"
             )
-        # Nullable numbers distinguish an empty source field from a reported 0.
-        frame[column] = parsed.astype("Float64")
+
+        numeric_columns = [
+            name for name in columns if name.endswith(NUMERIC_SUFFIXES)
+        ]
+
+        for column in numeric_columns:
+            original = frame[column]
+            parsed = pd.to_numeric(
+                original.mask(original.eq("")),
+                errors="coerce",
+            )
+            invalid = original.ne("") & (
+                parsed.isna()
+                | parsed.isin([float("inf"), float("-inf")])
+            )
+
+            if invalid.any():
+                bad_index = int(invalid[invalid].index[0])
+                number = csv_row_numbers[bad_index]
+                raise ST60FormatError(
+                    f"CSV line {number}: invalid numeric value "
+                    f"{frame.loc[bad_index, column]!r} "
+                    f"in {column}"
+                )
+
+            frame[column] = parsed.astype("Float64")
 
     frame["report_month"] = pd.Timestamp(report_month)
     frame["source_file"] = source.name
@@ -202,13 +224,23 @@ def _read_st60_bytes(
     )
 
 
-def read_st60_csv(path: str | Path) -> ST60Batch:
-    """Parse and validate one ST60 CSV without modifying the source.
 
-    Raises FileNotFoundError for missing files and ST60FormatError for
-    bad structure, identifiers, periods, or non-numeric quantities.
+def read_st60_csv(
+    path: str | Path,
+    *,
+    record_mode: RecordMode = "strict",
+) -> ST60Batch:
+    """Read an ST60 CSV using strict or raw record handling.
+
+    Strict mode validates records and converts numeric columns.
+    Raw mode preserves original field text for quality assessment.
+    Both modes enforce the source file's structural contract.
     """
     source = Path(path)
+
     return _read_st60_bytes(
-        source.read_bytes(), source_name=source.name, source_path=source
+        source.read_bytes(),
+        source_name=source.name,
+        source_path=source,
+        record_mode=record_mode,
     )
