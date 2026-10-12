@@ -8,13 +8,13 @@ The project aims to develop an end-to-end analytical pipeline using **Python, pa
 
 ### Project Status
 
-**In Development — Python Ingestion and Data Quality Validation**
+**In Development — Python and PostgreSQL Pipeline**
 
 Implemented reusable Python ingestion for monthly AER ST60 CSV files and historical ZIP archives, including source validation, SHA-256 provenance tracking, and automated pytest testing.
 
 Added data cleaning, record-level validation, quarantine handling, quality reports, and source-volume reconciliation. Validated the pipeline against 12 months of 2025 ST60 data (100,637 records) and August 2026 data (8,156 records).
 
-PostgreSQL integration, analytical SQL views, Power BI dashboards, and anomaly detection are upcoming milestones.
+PostgreSQL tables and a version-aware Python loader are implemented. Verified loading of 108,793 accepted records across 13 reporting months, with repeat loading of an identical file successfully skipped. Power BI dashboards, further analytical SQL views, and anomaly detection are upcoming milestones.
 
 ### Data Source
 

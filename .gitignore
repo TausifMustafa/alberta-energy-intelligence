@@ -35,3 +35,7 @@ Thumbs.db
 # Local database backups
 *.backup
 *.dump
+
+# Keep private session notes and SQLTools sessions local
+PROJECT_STATUS.md
+*.session.sql
