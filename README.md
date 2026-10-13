@@ -8,7 +8,7 @@ The project aims to develop an end-to-end analytical pipeline using **Python, pa
 
 ### Project Status
 
-**In Development â€” Python and PostgreSQL Pipeline**
+**In Development — Python and PostgreSQL Pipeline**
 
 Implemented reusable Python ingestion for monthly AER ST60 CSV files and historical ZIP archives, including source validation, SHA-256 provenance tracking, and automated pytest testing.
 
@@ -18,7 +18,7 @@ PostgreSQL tables and a version-aware Python loader are implemented. The databas
 
 ### Data Source
 
-[Alberta Energy Regulator â€” ST60 Monthly Production, Flaring and Venting Data](https://www.aer.ca/data-and-performance-reports/statistical-reports/st60)
+[Alberta Energy Regulator — ST60 Monthly Production, Flaring and Venting Data](https://www.aer.ca/data-and-performance-reports/statistical-reports/st60)
 
 ST60 contains reported battery-level data and does not represent all Alberta oil and gas production. This independent educational project is not affiliated with or endorsed by the AER.
 
@@ -92,9 +92,9 @@ The historical quality report generates monthly artifacts under:
 
 Each monthly folder contains:
 
-- `summary.json` â€” reporting period, checksums, and quality counts.
-- `issues.csv` â€” validation findings with reason codes.
-- `quarantined.csv` â€” rejected records with original source values.
+- `summary.json` — reporting period, checksums, and quality counts.
+- `issues.csv` — validation findings with reason codes.
+- `quarantined.csv` — rejected records with original source values.
 
 Generated files and original raw data remain excluded from Git.
 
@@ -120,7 +120,7 @@ compliance.
 
 ST60 reports battery-level quantities and does not represent
 all Alberta oil and gas production. Original reporting units are
-preserved, including oil in mÂ³ and gas volumes in thousands of mÂ³.
+preserved, including oil in m³ and gas volumes in thousands of m³.
 
 Data source: Alberta Energy Regulator (AER), ST60.
 
