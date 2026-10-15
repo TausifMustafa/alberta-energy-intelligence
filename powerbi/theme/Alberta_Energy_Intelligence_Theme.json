@@ -1,0 +1,21 @@
+{
+  "name": "Alberta Energy Intelligence - Light",
+  "dataColors": [
+    "#117C73",
+    "#2F6FED",
+    "#D98A25",
+    "#8456C9",
+    "#52637A",
+    "#36A39B",
+    "#80A4EB",
+    "#C37A64"
+  ],
+  "background": "#FFFFFF",
+  "foreground": "#17243A",
+  "tableAccent": "#117C73",
+  "firstLevelElements": "#17243A",
+  "secondLevelElements": "#52637A",
+  "thirdLevelElements": "#E8EEF5",
+  "fourthLevelElements": "#748499",
+  "secondaryBackground": "#F4F7FB"
+}

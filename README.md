@@ -8,13 +8,13 @@ The project aims to develop an end-to-end analytical pipeline using **Python, pa
 
 ### Project Status
 
-**In Development — Python and PostgreSQL Pipeline**
+**In Development — Working Power BI Executive Overview**
 
 Implemented reusable Python ingestion for monthly AER ST60 CSV files and historical ZIP archives, including source validation, SHA-256 provenance tracking, and automated pytest testing.
 
 Added data cleaning, record-level validation, quarantine handling, quality reports, and source-volume reconciliation. Validated the pipeline against 12 months of 2025 ST60 data (100,637 records) and August 2026 data (8,156 records).
 
-PostgreSQL tables and a version-aware Python loader are implemented. The database now contains **371,244 accepted battery-month records across 44 reporting months (January 2023-August 2026)**. Source-to-database counts and five core measurements reconciled for the Day 6 backfill. Live PostgreSQL integration testing verified source revisions, identical-source skipping, and failed-load rollback. The analytical SQL layer now provides a validated battery-month fact view, date/operator/battery dimensions, and monthly KPIs. Power BI dashboards and anomaly detection remain upcoming milestones.
+PostgreSQL tables and a version-aware Python loader are implemented. The database now contains **371,244 accepted battery-month records across 44 reporting months (January 2023-August 2026)**. Source-to-database counts and five core measurements reconciled for the Day 6 backfill. Live PostgreSQL integration testing verified source revisions, identical-source skipping, and failed-load rollback. The analytical SQL layer now provides a validated battery-month fact view, date/operator/battery dimensions, and monthly KPIs. The Power BI semantic model and Executive Overview dashboard are implemented and validated locally. The Production Performance, Flaring & Venting, and Facility Investigation pages, along with explainable anomaly detection, remain upcoming milestones.
 
 ### Data Source
 
@@ -125,3 +125,6 @@ preserved, including oil in m³ and gas volumes in thousands of m³.
 Data source: Alberta Energy Regulator (AER), ST60.
 
 See [Analytical SQL and KPI definitions](docs/analytics.md) for the reporting model, relationships, and validation rules.
+
+See [Power BI Executive Overview](docs/powerbi_executive_overview.md)
+for dashboard design, validated results, interactive filters, and limitations.
